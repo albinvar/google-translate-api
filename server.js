@@ -56,24 +56,41 @@ const scrapeProxyList = async () => {
       return cachedProxies;
     }
 
-    // Fetch new proxies
-    const url = "https://free-proxy-list.net/";
     const response = await axios.get(url);
     const $ = cheerio.load(response.data);
     const proxies = [];
 
     $("table.table tbody tr").each((index, element) => {
       const row = $(element).find("td");
-      proxies.push({
-        ip: $(row[0]).text(),
-        port: $(row[1]).text(),
-        code: $(row[2]).text(),
-        country: $(row[3]).text(),
-        anonymity: $(row[4]).text(),
-        google: $(row[5]).text(),
-        https: $(row[6]).text(),
-        lastChecked: $(row[7]).text(),
-      });
+
+      const ip = $(row[0]).text().trim();
+      const port = $(row[1]).text().trim();
+      const code = $(row[2]).text().trim();
+      const country = $(row[3]).text().trim();
+      const anonymity = $(row[4]).text().trim();
+      const google = $(row[5]).text().trim();
+      const https = $(row[6]).text().trim();
+      const lastChecked = $(row[7]).text().trim();
+
+      // Check if the data is valid before adding it to the list
+      if (
+        ip &&
+        port &&
+        country &&
+        !isNaN(port) && // Ensure port is numeric
+        !/^\d{1,3}(\.\d{1,3}){3}$/.test(ip) // Ensure IP format is valid
+      ) {
+        proxies.push({
+          ip,
+          port,
+          code,
+          country,
+          anonymity,
+          google,
+          https,
+          lastChecked,
+        });
+      }
     });
 
     cachedProxies = proxies;
