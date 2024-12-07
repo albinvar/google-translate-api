@@ -1,5 +1,4 @@
 node_modules
 npm-debug.log
-/data
-stats.db
+/data/stats.db
 .env
