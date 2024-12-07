@@ -1,6 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const cheerio = require("cheerio");
+const sqlite3 = require("sqlite3").verbose();
 const { HttpProxyAgent } = require("http-proxy-agent");
 const { translate } = require("@vitalets/google-translate-api");
 const swaggerUi = require("swagger-ui-express");
@@ -13,6 +14,90 @@ const v1Router = express.Router();
 
 // Middleware to parse JSON body
 app.use(express.json());
+
+// Initialize SQLite Database
+const db = new sqlite3.Database("./stats.db", (err) => {
+  if (err) {
+    console.error("Error opening database:", err.message);
+  } else {
+    console.log("Connected to SQLite database");
+    // Create tables if they don't exist
+    db.run(
+      `CREATE TABLE IF NOT EXISTS stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip TEXT,
+        language TEXT,
+        characters_translated INTEGER,
+        outcome TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`
+    );
+  }
+});
+
+// Helper function to insert stats into the database
+const recordStats = (ip, language, characters, outcome) => {
+  db.run(
+    `INSERT INTO stats (ip, language, characters_translated, outcome) VALUES (?, ?, ?, ?)`,
+    [ip, language, characters, outcome],
+    (err) => {
+      if (err) {
+        console.error("Error inserting stats:", err.message);
+      }
+    }
+  );
+};
+
+// Helper function to fetch stats from the database
+// Helper function to fetch stats from the database
+const fetchStats = async () => {
+  return new Promise((resolve, reject) => {
+    const queries = {
+      globalStats: `
+        SELECT 
+          COUNT(*) AS total_requests,
+          SUM(CASE WHEN outcome = 'success' THEN 1 ELSE 0 END) AS successful_requests,
+          SUM(CASE WHEN outcome = 'failure' THEN 1 ELSE 0 END) AS failed_requests,
+          SUM(characters_translated) AS total_characters,
+          COUNT(DISTINCT ip) AS unique_ips
+        FROM stats
+      `,
+      perLanguageStats: `
+        SELECT 
+          language,
+          COUNT(*) AS total_requests,
+          SUM(CASE WHEN outcome = 'success' THEN 1 ELSE 0 END) AS successful_requests,
+          SUM(CASE WHEN outcome = 'failure' THEN 1 ELSE 0 END) AS failed_requests,
+          SUM(characters_translated) AS total_characters
+        FROM stats
+        GROUP BY language
+      `,
+      perIpStats: `
+        SELECT 
+          ip,
+          COUNT(*) AS request_count,
+          SUM(characters_translated) AS total_characters
+        FROM stats
+        GROUP BY ip
+      `,
+    };
+
+    const results = {};
+    let pendingQueries = Object.keys(queries).length;
+
+    for (const [key, query] of Object.entries(queries)) {
+      db.all(query, [], (err, rows) => {
+        if (err) {
+          return reject(err);
+        }
+        results[key] = rows;
+        if (--pendingQueries === 0) {
+          resolve(results);
+        }
+      });
+    }
+  });
+};
 
 // Swagger definition
 const swaggerOptions = {
@@ -261,8 +346,10 @@ const translateWithProxy = async (text, lang, proxies, maxRetries = 15) => {
  */
 v1Router.post("/translate", checkAuth, async (req, res) => {
   const { text, lang } = req.body;
+  const ip = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
 
   if (!text || !lang) {
+    recordStats(ip, lang, 0, "failure");
     return res.status(400).json({ error: "Text and lang are required." });
   }
 
@@ -271,6 +358,7 @@ v1Router.post("/translate", checkAuth, async (req, res) => {
     const result = await translateWithProxy(text, lang, proxies);
 
     if (result.success) {
+      recordStats(ip, lang, text.length, "success");
       res.json({
         translatedText: result.translatedText,
         proxyEnabled: false,
@@ -278,6 +366,7 @@ v1Router.post("/translate", checkAuth, async (req, res) => {
         retries: 0,
       });
     } else {
+      recordStats(ip, lang, 0, "failure");
       res.status(500).json({
         success: false,
         message: result.message,
@@ -287,6 +376,7 @@ v1Router.post("/translate", checkAuth, async (req, res) => {
       });
     }
   } catch (error) {
+    recordStats(ip, lang, 0, "failure");
     res.status(500).json({
       success: false,
       message: "Failed to fetch proxies or translate text",
@@ -373,6 +463,120 @@ v1Router.get("/proxies", checkAuth, async (req, res) => {
     res
       .status(500)
       .json({ success: false, message: "Failed to fetch proxies" });
+  }
+});
+
+/**
+ * @swagger
+ * /v1/stats:
+ *   get:
+ *     summary: Retrieve server statistics
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved server statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 global_stats:
+ *                   type: object
+ *                   properties:
+ *                     total_requests:
+ *                       type: integer
+ *                       example: 120
+ *                     successful_requests:
+ *                       type: integer
+ *                       example: 110
+ *                     failed_requests:
+ *                       type: integer
+ *                       example: 10
+ *                     total_characters:
+ *                       type: integer
+ *                       example: 25000
+ *                     unique_ips:
+ *                       type: integer
+ *                       example: 5
+ *                 per_language_stats:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       language:
+ *                         type: string
+ *                         example: "en"
+ *                       total_requests:
+ *                         type: integer
+ *                         example: 60
+ *                       successful_requests:
+ *                         type: integer
+ *                         example: 55
+ *                       failed_requests:
+ *                         type: integer
+ *                         example: 5
+ *                       total_characters:
+ *                         type: integer
+ *                         example: 15000
+ *                 per_ip_stats:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       ip:
+ *                         type: string
+ *                         example: "192.168.1.1"
+ *                       request_count:
+ *                         type: integer
+ *                         example: 15
+ *                       total_characters:
+ *                         type: integer
+ *                         example: 3500
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Unauthorized: Missing or invalid Bearer Token"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to retrieve server statistics"
+ */
+// Stats endpoint
+v1Router.get("/stats", checkAuth, async (req, res) => {
+  try {
+    const { globalStats, perLanguageStats, perIpStats } = await fetchStats();
+
+    res.json({
+      success: true,
+      global_stats: globalStats[0], // Assumes single row for global stats
+      per_language_stats: perLanguageStats,
+      per_ip_stats: perIpStats,
+    });
+  } catch (error) {
+    console.error("Error retrieving stats:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve stats",
+    });
   }
 });
 

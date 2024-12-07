@@ -5,3 +5,6 @@ yarn-error.log
 
 # Express specific
 .env
+
+# Database
+stats.db
