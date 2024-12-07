@@ -5,7 +5,7 @@ const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
 const { translate } = require("@vitalets/google-translate-api");
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Middleware to parse JSON body
 app.use(express.json());
@@ -25,6 +25,7 @@ const swaggerOptions = {
           type: "http",
           scheme: "bearer",
           bearerFormat: "JWT",
+          description: "Enter 'Bearer <your-token-here>'",
         },
       },
     },
@@ -79,6 +80,10 @@ const scrapeProxyList = async () => {
     lastFetchedTime = now;
     return proxies;
   } catch (error) {
+    if (cachedProxies.length > 0) {
+      console.warn("Using stale cache due to fetch failure");
+      return cachedProxies;
+    }
     console.error("Error scraping proxy list:", error.message);
     throw new Error("Failed to fetch proxy list.");
   }
