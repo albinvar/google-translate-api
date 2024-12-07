@@ -37,11 +37,58 @@ const swaggerOptions = {
   apis: ["./server.js"], // This points to the file with the JSDoc comments
 };
 
+let cachedProxies = [];
+let lastFetchedTime = null;
+
+// Helper function to scrape proxy list
+const scrapeProxyList = async () => {
+  const url = "https://free-proxy-list.net/";
+  try {
+    const now = Date.now();
+    const cacheDuration = 5 * 60 * 1000; // 5 minutes
+
+    if (
+      cachedProxies.length > 0 &&
+      lastFetchedTime &&
+      now - lastFetchedTime < cacheDuration
+    ) {
+      return cachedProxies;
+    }
+
+    // Fetch new proxies
+    const url = "https://free-proxy-list.net/";
+    const response = await axios.get(url);
+    const $ = cheerio.load(response.data);
+    const proxies = [];
+
+    $("table.table tbody tr").each((index, element) => {
+      const row = $(element).find("td");
+      proxies.push({
+        ip: $(row[0]).text(),
+        port: $(row[1]).text(),
+        code: $(row[2]).text(),
+        country: $(row[3]).text(),
+        anonymity: $(row[4]).text(),
+        google: $(row[5]).text(),
+        https: $(row[6]).text(),
+        lastChecked: $(row[7]).text(),
+      });
+    });
+
+    cachedProxies = proxies;
+    lastFetchedTime = now;
+    return proxies;
+  } catch (error) {
+    console.error("Error scraping proxy list:", error.message);
+    throw new Error("Failed to fetch proxy list.");
+  }
+};
+
 // Initialize SwaggerJSdoc
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 
 // Serve Swagger UI
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+app.use("/api", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Middleware for Bearer Token Authentication
 app.use((req, res, next) => {
@@ -145,35 +192,6 @@ app.post("/translate", (req, res) => {
     });
 });
 
-// Helper function to scrape proxy list
-const scrapeProxyList = async () => {
-  const url = "https://free-proxy-list.net/";
-  try {
-    const response = await axios.get(url);
-    const $ = cheerio.load(response.data);
-    const proxies = [];
-
-    $("table.table tbody tr").each((index, element) => {
-      const row = $(element).find("td");
-      proxies.push({
-        ip: $(row[0]).text(),
-        port: $(row[1]).text(),
-        code: $(row[2]).text(),
-        country: $(row[3]).text(),
-        anonymity: $(row[4]).text(),
-        google: $(row[5]).text(),
-        https: $(row[6]).text(),
-        lastChecked: $(row[7]).text(),
-      });
-    });
-
-    return proxies;
-  } catch (error) {
-    console.error("Error scraping proxy list:", error.message);
-    throw new Error("Failed to fetch proxy list.");
-  }
-};
-
 /**
  * @swagger
  * /proxies:
@@ -258,5 +276,5 @@ app.get("/proxies", async (req, res) => {
 // Start the server
 app.listen(port, () => {
   console.log(`Translation API listening at http://localhost:${port}`);
-  console.log(`Swagger UI available at http://localhost:${port}/api-docs`);
+  console.log(`Swagger UI available at http://localhost:${port}/api`);
 });
