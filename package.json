@@ -11,6 +11,8 @@
   "license": "ISC",
   "dependencies": {
     "@vitalets/google-translate-api": "^9.2.0",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   }
 }
