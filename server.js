@@ -46,7 +46,7 @@ const scrapeProxyList = async () => {
   const url = "https://free-proxy-list.net/";
   try {
     const now = Date.now();
-    const cacheDuration = 5 * 60 * 1000; // 5 minutes
+    const cacheDuration = 1 * 60 * 1000; // 1 minutes
 
     if (
       cachedProxies.length > 0 &&
@@ -72,14 +72,13 @@ const scrapeProxyList = async () => {
       const https = $(row[6]).text().trim();
       const lastChecked = $(row[7]).text().trim();
 
-      // Check if the data is valid before adding it to the list
-      if (
-        ip &&
-        port &&
-        country &&
-        !isNaN(port) && // Ensure port is numeric
-        !/^\d{1,3}(\.\d{1,3}){3}$/.test(ip) // Ensure IP format is valid
-      ) {
+      // Additional Validation Rules:
+      const isValidIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(ip);
+      const isValidPort = !isNaN(port) && port > 0 && port <= 65535;
+      const isValidCountry = country && !/^\d+%$/.test(country); // Exclude percentage-like countries
+
+      // Ensure valid IP, port, and meaningful country values
+      if (isValidIp && isValidPort && isValidCountry) {
         proxies.push({
           ip,
           port,
