@@ -1,0 +1,12 @@
+version: "3.8"
+services:
+  translation-api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - API_TOKEN=you-are-lucky
+    volumes:
+      - ./data:/usr/src/app/data
+    restart: unless-stopped

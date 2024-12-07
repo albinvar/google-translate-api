@@ -18,7 +18,7 @@ const v1Router = express.Router();
 app.use(express.json());
 
 // Initialize SQLite Database
-const db = new sqlite3.Database("./stats.db", (err) => {
+const db = new sqlite3.Database("./data/stats.db", (err) => {
   if (err) {
     console.error("Error opening database:", err.message);
   } else {
