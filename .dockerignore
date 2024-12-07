@@ -1,4 +1,14 @@
+# Ignore database files in any location
+stats.db
+data/
+
+# Ignore environment and sensitive files
+.env
+
+# Ignore Node.js-specific files and directories
 node_modules
 npm-debug.log
-/data/stats.db
-.env
+pnpm-debug.log
+
+# OS-specific files
+.DS_Store
