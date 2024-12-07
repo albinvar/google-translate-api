@@ -1,3 +1,4 @@
+require("dotenv").config(); // Load environment variables from .env
 const express = require("express");
 const axios = require("axios");
 const cheerio = require("cheerio");
@@ -7,6 +8,7 @@ const { translate } = require("@vitalets/google-translate-api");
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
 const app = express();
+const apitoken = process.env.API_TOKEN || "you-are-lucky";
 const port = process.env.PORT || 3000;
 
 // Create a router for API v1
@@ -149,7 +151,7 @@ const checkAuth = (req, res, next) => {
   const tokenValue = token.split(" ")[1];
 
   // You can validate the token here, e.g., by verifying JWT
-  if (!tokenValue || tokenValue !== "your-valid-token") {
+  if (!tokenValue || tokenValue !== apitoken) {
     return res
       .status(401)
       .json({ error: "Unauthorized: Invalid Bearer Token" });

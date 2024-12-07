@@ -13,6 +13,7 @@
     "@vitalets/google-translate-api": "^9.2.0",
     "axios": "^1.7.9",
     "cheerio": "^1.0.0",
+    "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "http-proxy-agent": "^7.0.2",
     "sqlite3": "^5.1.7",
