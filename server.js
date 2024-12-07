@@ -1,16 +1,20 @@
 const express = require("express");
 const axios = require("axios");
 const cheerio = require("cheerio");
+const { HttpProxyAgent } = require("http-proxy-agent");
+const { translate } = require("@vitalets/google-translate-api");
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
-const { translate } = require("@vitalets/google-translate-api");
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Create a router for API v1
+const v1Router = express.Router();
 
 // Middleware to parse JSON body
 app.use(express.json());
 
-// Swagger definition (basic info, paths, etc.)
+// Swagger definition
 const swaggerOptions = {
   definition: {
     openapi: "3.0.0",
@@ -38,15 +42,44 @@ const swaggerOptions = {
   apis: ["./server.js"], // This points to the file with the JSDoc comments
 };
 
+// Initialize SwaggerJSdoc
+const swaggerDocs = swaggerJsdoc(swaggerOptions);
+
+// Serve Swagger UI
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+
 let cachedProxies = [];
 let lastFetchedTime = null;
+
+// Middleware to check Bearer token
+const checkAuth = (req, res, next) => {
+  const token = req.headers["authorization"];
+  if (!token) {
+    return res
+      .status(401)
+      .json({ error: "Unauthorized: Missing or invalid Bearer Token" });
+  }
+
+  // Remove the "Bearer " part of the token
+  const tokenValue = token.split(" ")[1];
+
+  // You can validate the token here, e.g., by verifying JWT
+  if (!tokenValue || tokenValue !== "your-valid-token") {
+    return res
+      .status(401)
+      .json({ error: "Unauthorized: Invalid Bearer Token" });
+  }
+
+  // Proceed to the next middleware or route handler
+  next();
+};
 
 // Helper function to scrape proxy list
 const scrapeProxyList = async () => {
   const url = "https://free-proxy-list.net/";
   try {
     const now = Date.now();
-    const cacheDuration = 1 * 60 * 1000; // 1 minutes
+    const cacheDuration = 5 * 60 * 1000; // 5 minutes
 
     if (
       cachedProxies.length > 0 &&
@@ -65,29 +98,18 @@ const scrapeProxyList = async () => {
 
       const ip = $(row[0]).text().trim();
       const port = $(row[1]).text().trim();
-      const code = $(row[2]).text().trim();
       const country = $(row[3]).text().trim();
-      const anonymity = $(row[4]).text().trim();
-      const google = $(row[5]).text().trim();
-      const https = $(row[6]).text().trim();
-      const lastChecked = $(row[7]).text().trim();
 
-      // Additional Validation Rules:
+      // Basic validation for proxies
       const isValidIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(ip);
       const isValidPort = !isNaN(port) && port > 0 && port <= 65535;
       const isValidCountry = country && !/^\d+%$/.test(country); // Exclude percentage-like countries
 
-      // Ensure valid IP, port, and meaningful country values
       if (isValidIp && isValidPort && isValidCountry) {
         proxies.push({
           ip,
           port,
-          code,
           country,
-          anonymity,
-          google,
-          https,
-          lastChecked,
         });
       }
     });
@@ -105,36 +127,67 @@ const scrapeProxyList = async () => {
   }
 };
 
-// Initialize SwaggerJSdoc
-const swaggerDocs = swaggerJsdoc(swaggerOptions);
-
-// Serve Swagger UI
-app.use("/api", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
-
-// Middleware for Bearer Token Authentication
-app.use((req, res, next) => {
-  const authHeader = req.headers["authorization"];
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res
-      .status(401)
-      .json({ error: "Unauthorized: Missing Bearer Token" });
+// Function to use proxy and translate
+const translateWithProxy = async (text, lang, proxies, maxRetries = 15) => {
+  // Attempt translation without a proxy first
+  try {
+    const { text: translatedText } = await translate(text, { to: lang });
+    return {
+      success: true,
+      translatedText,
+      proxyEnabled: false,
+      proxyIp: null,
+      retries: 0,
+    };
+  } catch (initialError) {
+    console.log("Initial translation failed. Falling back to proxies...");
   }
 
-  const token = authHeader.split(" ")[1];
-  // Replace this with your actual token validation logic
-  if (token !== "your-secret-token") {
-    return res.status(403).json({ error: "Forbidden: Invalid Token" });
+  // If the initial attempt fails, use proxies
+  let retries = 0;
+  let proxyUsed = null;
+
+  while (retries < maxRetries && proxies.length > retries) {
+    const proxy = proxies[retries];
+    const proxyString = `${proxy.ip}:${proxy.port}`;
+    const fetchOptions = {
+      agent: new HttpProxyAgent(`http://${proxyString}`),
+    };
+
+    try {
+      proxyUsed = proxy;
+      const { text: translatedText } = await translate(text, {
+        to: lang,
+        fetchOptions,
+      });
+      return {
+        success: true,
+        translatedText,
+        proxyEnabled: true,
+        proxyIp: proxy.ip,
+        retries: retries + 1,
+      };
+    } catch (error) {
+      retries++;
+      console.log(`Proxy ${proxyString} failed. Retrying with next proxy...`);
+    }
   }
 
-  next();
-});
+  return {
+    success: false,
+    message: "All proxies failed.",
+    proxyEnabled: true,
+    proxyIp: proxyUsed ? proxyUsed.ip : null,
+    retries,
+  };
+};
 
-// Translation endpoint
+// Translation endpoint with proxy logic
 /**
  * @swagger
- * /translate:
+ * /v1/translate:
  *   post:
- *     summary: Translate text into the target language
+ *     summary: Translate text into the target language with proxy support
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -190,32 +243,60 @@ app.use((req, res, next) => {
  *             schema:
  *               type: object
  *               properties:
- *                 error:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
  *                   type: string
- *                   example: "Translation failed"
+ *                   example: "Failed to translate after multiple retries"
+ *                 proxyEnabled:
+ *                   type: boolean
+ *                   example: true
+ *                 proxyIp:
+ *                   type: string
+ *                   example: "161.123.115.53"
+ *                 retries:
+ *                   type: integer
+ *                   example: 15
  */
-
-app.post("/translate", (req, res) => {
+v1Router.post("/translate", checkAuth, async (req, res) => {
   const { text, lang } = req.body;
 
   if (!text || !lang) {
     return res.status(400).json({ error: "Text and lang are required." });
   }
 
-  translate(text, { to: lang })
-    .then((response) => {
-      res.json({ translatedText: response.text });
-    })
-    .catch((error) => {
-      res
-        .status(500)
-        .json({ error: "Translation failed", details: error.message });
+  try {
+    const proxies = await scrapeProxyList();
+    const result = await translateWithProxy(text, lang, proxies);
+
+    if (result.success) {
+      res.json({
+        translatedText: result.translatedText,
+        proxyEnabled: false,
+        proxyIp: null,
+        retries: 0,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: result.message,
+        proxyEnabled: result.proxyEnabled,
+        proxyIp: result.proxyIp,
+        retries: result.retries,
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch proxies or translate text",
     });
+  }
 });
 
 /**
  * @swagger
- * /proxies:
+ * /v1/proxies:
  *   get:
  *     summary: Fetch a list of free proxies
  *     security:
@@ -282,20 +363,24 @@ app.post("/translate", (req, res) => {
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: "Failed to fetch proxy list."
+ *                   example: "Failed to fetch proxies"
  */
-// API endpoint to return proxy list
-app.get("/proxies", async (req, res) => {
+v1Router.get("/proxies", checkAuth, async (req, res) => {
   try {
     const proxies = await scrapeProxyList();
     res.json({ success: true, data: proxies });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch proxies" });
   }
 });
+
+// Use the router with a prefix
+app.use("/v1", v1Router);
 
 // Start the server
 app.listen(port, () => {
   console.log(`Translation API listening at http://localhost:${port}`);
-  console.log(`Swagger UI available at http://localhost:${port}/api`);
+  console.log(`Swagger Docs at http://localhost:${port}/api`);
 });
