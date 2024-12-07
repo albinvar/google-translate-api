@@ -1,4 +1,6 @@
 const express = require("express");
+const axios = require("axios");
+const cheerio = require("cheerio");
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
 const { translate } = require("@vitalets/google-translate-api");
@@ -141,6 +143,116 @@ app.post("/translate", (req, res) => {
         .status(500)
         .json({ error: "Translation failed", details: error.message });
     });
+});
+
+// Helper function to scrape proxy list
+const scrapeProxyList = async () => {
+  const url = "https://free-proxy-list.net/";
+  try {
+    const response = await axios.get(url);
+    const $ = cheerio.load(response.data);
+    const proxies = [];
+
+    $("table.table tbody tr").each((index, element) => {
+      const row = $(element).find("td");
+      proxies.push({
+        ip: $(row[0]).text(),
+        port: $(row[1]).text(),
+        code: $(row[2]).text(),
+        country: $(row[3]).text(),
+        anonymity: $(row[4]).text(),
+        google: $(row[5]).text(),
+        https: $(row[6]).text(),
+        lastChecked: $(row[7]).text(),
+      });
+    });
+
+    return proxies;
+  } catch (error) {
+    console.error("Error scraping proxy list:", error.message);
+    throw new Error("Failed to fetch proxy list.");
+  }
+};
+
+/**
+ * @swagger
+ * /proxies:
+ *   get:
+ *     summary: Fetch a list of free proxies
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully fetched the proxy list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       ip:
+ *                         type: string
+ *                         example: "103.152.112.120"
+ *                       port:
+ *                         type: string
+ *                         example: "80"
+ *                       code:
+ *                         type: string
+ *                         example: "US"
+ *                       country:
+ *                         type: string
+ *                         example: "United States"
+ *                       anonymity:
+ *                         type: string
+ *                         example: "anonymous"
+ *                       google:
+ *                         type: string
+ *                         example: "yes"
+ *                       https:
+ *                         type: string
+ *                         example: "no"
+ *                       lastChecked:
+ *                         type: string
+ *                         example: "9 secs ago"
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Unauthorized: Missing or invalid Bearer Token"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to fetch proxy list."
+ */
+// API endpoint to return proxy list
+app.get("/proxies", async (req, res) => {
+  try {
+    const proxies = await scrapeProxyList();
+    res.json({ success: true, data: proxies });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
 
 // Start the server
