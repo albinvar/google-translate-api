@@ -1,22 +1,61 @@
-const { translate } = require("@vitalets/google-translate-api");
 const { HttpProxyAgent } = require("http-proxy-agent");
+const { translate } = require("@vitalets/google-translate-api");
+
+const translateWithTimeout = (text, lang, fetchOptions, timeout = 3000) => {
+  // Promise to handle translation
+  const translatePromise = translate(text, { to: lang, fetchOptions });
+
+  // Promise to enforce timeout
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Request timed out")), timeout)
+  );
+
+  // Return the race between translation and timeout
+  return Promise.race([translatePromise, timeoutPromise]);
+};
 
 const translateWithProxy = async (text, lang, proxies, maxRetries = 15) => {
   let retries = 0;
+  let proxyUsed = null;
+
   while (retries < maxRetries && proxies.length > retries) {
     const proxy = proxies[retries];
-    const proxyAgent = new HttpProxyAgent(`http://${proxy.ip}:${proxy.port}`);
+    const proxyString = `${proxy.ip}:${proxy.port}`;
+    const fetchOptions = {
+      agent: new HttpProxyAgent(`http://${proxyString}`),
+    };
+
     try {
-      const { text: translatedText } = await translate(text, {
-        to: lang,
-        fetchOptions: { agent: proxyAgent },
-      });
-      return { success: true, translatedText, proxyUsed: proxy.ip };
-    } catch {
+      proxyUsed = proxy;
+
+      // Use translateWithTimeout to enforce timeout for each proxy attempt
+      const { text: translatedText } = await translateWithTimeout(
+        text,
+        lang,
+        fetchOptions,
+        3000 // 3-second timeout
+      );
+
+      return {
+        success: true,
+        translatedText,
+        proxyUsed: proxy.ip,
+        retries,
+      };
+    } catch (error) {
       retries++;
+      console.error(
+        `[TranslateService] Proxy ${proxyString} failed: ${error.message}. Retrying...`
+      );
     }
   }
-  return { success: false, message: "Failed to translate using proxies." };
+
+  return {
+    success: false,
+    message: "Failed to translate after multiple retries",
+    proxyUsed: proxyUsed ? proxyUsed.ip : null,
+    retries,
+  };
 };
 
 module.exports = { translateWithProxy };

@@ -1,6 +1,6 @@
 const express = require("express");
 const { translateWithProxy } = require("../services/translateService");
-const { scrapeProxyList } = require("../services/proxyService");
+const { fetchProxies } = require("../services/proxyService");
 const { recordStats } = require("../services/databaseService");
 const checkAuth = require("../middleware/auth");
 
@@ -80,15 +80,21 @@ router.post("/", checkAuth, async (req, res) => {
   const { text, lang } = req.body;
   if (!text || !lang) return res.status(400).json({ error: "Missing fields" });
 
-  const proxies = await scrapeProxyList();
+  // Fetch proxies using the proxy service
+  const proxies = await fetchProxies();
+
+  // Perform translation with proxies
   const result = await translateWithProxy(text, lang, proxies);
 
+  // Record translation stats
   recordStats(
     req.ip,
     lang,
     text.length,
     result.success ? "success" : "failure"
   );
+
+  // Respond with the translation result
   res.json(result);
 });
 

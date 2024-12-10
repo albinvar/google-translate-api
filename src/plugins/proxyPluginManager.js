@@ -1,6 +1,7 @@
 const proxiflyPlugin = require("./proxiflyPlugin");
 const scrapeProxyPlugin = require("./scrapeProxyPlugin");
 const proxyFreeOnlyPlugin = require("./proxyFreeOnlyPlugin");
+const spysOnePlugin = require("./spysOnePlugin");
 
 const cache = {
   proxies: [],
@@ -10,7 +11,12 @@ const cache = {
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 const proxyPluginManager = {
-  plugins: [proxiflyPlugin, scrapeProxyPlugin, proxyFreeOnlyPlugin], // Add ProxyFreeOnly plugin
+  plugins: [
+    // proxiflyPlugin,
+    scrapeProxyPlugin,
+    proxyFreeOnlyPlugin,
+    spysOnePlugin,
+  ],
 
   fetchProxies: async () => {
     const now = Date.now();
