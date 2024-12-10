@@ -8,8 +8,8 @@ WORKDIR /usr/src/app
 COPY package.json pnpm-lock.yaml ./
 RUN npm install -g pnpm && pnpm install --prod
 
-# Copy the application source code
-COPY . .
+# Copy only the source code (excluding node_modules, data, etc.)
+COPY src ./src
 
 # Create a volume for the SQLite database
 VOLUME [ "/usr/src/app/data" ]
@@ -22,4 +22,4 @@ ENV PORT=3000
 ENV API_TOKEN=you-are-lucky
 
 # Start the application
-CMD ["node", "server.js"]
+CMD ["node", "src/server.js"]
