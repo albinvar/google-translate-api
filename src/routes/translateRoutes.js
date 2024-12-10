@@ -1,4 +1,5 @@
 const express = require("express");
+const { translate } = require("@vitalets/google-translate-api");
 const { translateWithProxy } = require("../services/translateService");
 const { fetchProxies } = require("../services/proxyService");
 const { recordStats } = require("../services/databaseService");
@@ -80,11 +81,24 @@ router.post("/", checkAuth, async (req, res) => {
   const { text, lang } = req.body;
   if (!text || !lang) return res.status(400).json({ error: "Missing fields" });
 
-  // Fetch proxies using the proxy service
-  const proxies = await fetchProxies();
+  let result;
+  try {
+    // Attempt local translation first
+    const { text: translatedText } = await translate(text, { to: lang });
+    result = {
+      success: true,
+      translatedText,
+      proxyUsed: null,
+    };
+  } catch (error) {
+    console.warn(
+      "[TranslateService] Local translation failed, falling back to proxies."
+    );
 
-  // Perform translation with proxies
-  const result = await translateWithProxy(text, lang, proxies);
+    // Fetch proxies and perform proxy-based translation
+    const proxies = await fetchProxies();
+    result = await translateWithProxy(text, lang, proxies);
+  }
 
   // Record translation stats
   recordStats(
