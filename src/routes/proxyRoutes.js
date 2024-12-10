@@ -1,5 +1,5 @@
 const express = require("express");
-const { scrapeProxyList } = require("../services/proxyService");
+const proxyPluginManager = require("../plugins/proxyPluginManager");
 const checkAuth = require("../middleware/auth");
 
 const router = express.Router();
@@ -33,19 +33,9 @@ const router = express.Router();
  *                       port:
  *                         type: string
  *                         example: "80"
- *                       country:
+ *                       protocol:
  *                         type: string
- *                         example: "United States"
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 error:
- *                   type: string
- *                   example: "Unauthorized: Missing or invalid Bearer Token"
+ *                         example: "http"
  *       500:
  *         description: Internal server error
  *         content:
@@ -62,7 +52,7 @@ const router = express.Router();
  */
 router.get("/", checkAuth, async (req, res) => {
   try {
-    const proxies = await scrapeProxyList();
+    const proxies = await proxyPluginManager.fetchProxies();
     res.json({ success: true, data: proxies });
   } catch (error) {
     console.error("Error fetching proxies:", error.message);
