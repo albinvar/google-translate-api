@@ -10,13 +10,27 @@ const cache = {
 
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+// Dynamically load plugins based on environment variables
+const plugins = [];
+
+if (process.env.ENABLE_SCRAPE_PROXY_PLUGIN === "true") {
+  plugins.push(scrapeProxyPlugin);
+}
+
+if (process.env.ENABLE_PROXIFLY_PLUGIN === "true") {
+  plugins.push(proxiflyPlugin);
+}
+
+if (process.env.ENABLE_PROXY_FREE_ONLY_PLUGIN === "true") {
+  plugins.push(proxyFreeOnlyPlugin);
+}
+
+if (process.env.ENABLE_SPYS_ONE_PLUGIN === "true") {
+  plugins.push(spysOnePlugin);
+}
+
 const proxyPluginManager = {
-  plugins: [
-    // proxiflyPlugin,
-    scrapeProxyPlugin,
-    proxyFreeOnlyPlugin,
-    spysOnePlugin,
-  ],
+  plugins,
 
   fetchProxies: async () => {
     const now = Date.now();
@@ -32,7 +46,7 @@ const proxyPluginManager = {
     }
 
     try {
-      // Fetch from all plugins in parallel
+      // Fetch from all enabled plugins in parallel
       const results = await Promise.all(
         proxyPluginManager.plugins.map((plugin) => {
           console.log(
