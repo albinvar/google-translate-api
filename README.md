@@ -50,6 +50,8 @@ Examples:
 | `hi`          | Hindi            |
 | `ml`          | Malayalam        |
 
+And [more....](https://cloud.google.com/translate/docs/languages).
+
 ---
 
 ## 🚀 Getting Started
@@ -73,6 +75,7 @@ Examples:
    docker run -d \
    -p 3000:3000 \
    -e API_TOKEN=your-token \
+   -v translation-data:/usr/src/app/data \
    --name translation-api \
    albinvar/translation-api
    ```
@@ -103,6 +106,37 @@ Examples:
 
 4. **Access the API**:
    - Swagger Docs: [http://localhost:3000/docs](http://localhost:3000/docs)
+
+---
+
+### 🆙 Upgrade Docker Instance
+
+Upgrading your **Translation API** Docker instance is simple and ensures no data is lost during the process. Follow these steps:
+
+  1. Download the latest Docker image from Docker Hub:
+  ```bash
+  docker pull albinvar/translation-api
+  ```
+
+  2. Stop the currently running container:
+  ```bash
+  docker stop translation-api
+  ```
+
+  3. Remove the old container while keeping the named volume intact:
+  ```bash
+  docker rm translation-api
+  ```
+
+  4. Start a new container using the updated image and reattach the existing volume:
+  ```bash
+  docker run -d \
+    --name translation-api \
+    -p 3000:3000 \
+    -e API_TOKEN=your-token \
+    -v translation-data:/usr/src/app/data \
+    albinvar/translation-api:latest
+  ```
 
 ---
 
