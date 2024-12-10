@@ -19,7 +19,12 @@ const translateWithTimeout = (text, lang, fetchOptions, timeout = 3000) => {
   return Promise.race([translatePromise, timeoutPromise]);
 };
 
-const translateWithProxy = async (text, lang, proxies, maxRetries = 999) => {
+const translateWithProxy = async (
+  text,
+  lang,
+  proxies,
+  maxRetries = process.env.MAX_RETRIES || 20
+) => {
   let retries = 0;
   let proxyUsed = null;
 
@@ -38,7 +43,7 @@ const translateWithProxy = async (text, lang, proxies, maxRetries = 999) => {
         text,
         lang,
         fetchOptions,
-        3000 // 3-second timeout
+        process.env.TRANSLATE_TIMEOUT || 3000
       );
 
       console.log(`[TranslateService] Proxy ${proxyString} succeeded`);

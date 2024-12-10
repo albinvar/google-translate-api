@@ -20,6 +20,12 @@ EXPOSE 3000
 # Set default environment variables (can be overridden with `-e`)
 ENV PORT=3000
 ENV API_TOKEN=you-are-lucky
+ENV ENABLE_PROXIFLY_PLUGIN=true
+ENV ENABLE_SCRAPE_PROXY_PLUGIN=true
+ENV ENABLE_PROXY_FREE_ONLY_PLUGIN=true
+ENV ENABLE_SPYS_ONE_PLUGIN=true
+ENV MAX_RETRIES=3
+ENV MAX_TIMEOUT=3000
 
 # Start the application
 CMD ["node", "src/server.js"]
