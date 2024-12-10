@@ -1,5 +1,6 @@
 const proxiflyPlugin = require("./proxiflyPlugin");
 const scrapeProxyPlugin = require("./scrapeProxyPlugin");
+const proxyFreeOnlyPlugin = require("./proxyFreeOnlyPlugin");
 
 const cache = {
   proxies: [],
@@ -9,7 +10,7 @@ const cache = {
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 const proxyPluginManager = {
-  plugins: [proxiflyPlugin, scrapeProxyPlugin],
+  plugins: [proxiflyPlugin, scrapeProxyPlugin, proxyFreeOnlyPlugin], // Add ProxyFreeOnly plugin
 
   fetchProxies: async () => {
     const now = Date.now();
@@ -27,17 +28,29 @@ const proxyPluginManager = {
     try {
       // Fetch from all plugins in parallel
       const results = await Promise.all(
-        proxyPluginManager.plugins.map((plugin) => plugin.fetchProxies())
+        proxyPluginManager.plugins.map((plugin) => {
+          console.log(
+            `[ProxyPluginManager] Fetching proxies using ${plugin.name}`
+          );
+          return plugin.fetchProxies();
+        })
       );
 
-      // Flatten and filter unique proxies
-      const proxies = [...new Set(results.flat())];
+      // Combine results from all plugins and remove duplicates
+      const uniqueProxies = [
+        ...new Map(
+          results.flat().map((proxy) => [`${proxy.ip}:${proxy.port}`, proxy])
+        ).values(),
+      ];
 
       // Cache the combined result
-      cache.proxies = proxies;
+      cache.proxies = uniqueProxies;
       cache.lastFetched = now;
 
-      return proxies;
+      console.log(
+        `[ProxyPluginManager] Successfully fetched ${uniqueProxies.length} unique proxies`
+      );
+      return uniqueProxies;
     } catch (error) {
       console.error(
         "[ProxyPluginManager] Error fetching proxies:",
