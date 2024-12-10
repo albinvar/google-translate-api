@@ -168,6 +168,7 @@ const scrapeProxyList = async () => {
     const now = Date.now();
     const cacheDuration = 5 * 60 * 1000; // 5 minutes
 
+    // Return cached proxies if they are fresh
     if (
       cachedProxies.length > 0 &&
       lastFetchedTime &&
@@ -186,17 +187,25 @@ const scrapeProxyList = async () => {
       const ip = $(row[0]).text().trim();
       const port = $(row[1]).text().trim();
       const country = $(row[3]).text().trim();
+      const anonymity = $(row[4]).text().trim().toLowerCase();
+      const google = $(row[5]).text().trim().toLowerCase();
 
-      // Basic validation for proxies
+      // Basic validation and filtering for proxies
       const isValidIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(ip);
       const isValidPort = !isNaN(port) && port > 0 && port <= 65535;
-      const isValidCountry = country && !/^\d+%$/.test(country); // Exclude percentage-like countries
 
-      if (isValidIp && isValidPort && isValidCountry) {
+      if (
+        isValidIp &&
+        isValidPort &&
+        anonymity === "anonymous" &&
+        google === "yes"
+      ) {
         proxies.push({
           ip,
           port,
           country,
+          anonymity,
+          google,
         });
       }
     });
