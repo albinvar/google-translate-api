@@ -17,12 +17,12 @@ if (process.env.ENABLE_SCRAPE_PROXY_PLUGIN === "true") {
   plugins.push(scrapeProxyPlugin);
 }
 
-if (process.env.ENABLE_PROXIFLY_PLUGIN === "true") {
-  plugins.push(proxiflyPlugin);
-}
-
 if (process.env.ENABLE_PROXY_FREE_ONLY_PLUGIN === "true") {
   plugins.push(proxyFreeOnlyPlugin);
+}
+
+if (process.env.ENABLE_PROXIFLY_PLUGIN === "true") {
+  plugins.push(proxiflyPlugin);
 }
 
 if (process.env.ENABLE_SPYS_ONE_PLUGIN === "true") {

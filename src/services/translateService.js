@@ -10,11 +10,16 @@ const translateWithTimeout = (text, lang, fetchOptions, timeout = 3000) => {
     setTimeout(() => reject(new Error("Request timed out")), timeout)
   );
 
+  // indicate failure on console
+  translatePromise.catch((error) => {
+    console.error(`[TranslateService] Translation failed: ${error.message}`);
+  });
+
   // Return the race between translation and timeout
   return Promise.race([translatePromise, timeoutPromise]);
 };
 
-const translateWithProxy = async (text, lang, proxies, maxRetries = 15) => {
+const translateWithProxy = async (text, lang, proxies, maxRetries = 999) => {
   let retries = 0;
   let proxyUsed = null;
 
@@ -35,6 +40,8 @@ const translateWithProxy = async (text, lang, proxies, maxRetries = 15) => {
         fetchOptions,
         3000 // 3-second timeout
       );
+
+      console.log(`[TranslateService] Proxy ${proxyString} succeeded`);
 
       return {
         success: true,
