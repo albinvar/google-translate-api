@@ -9,4 +9,5 @@ services:
       - API_TOKEN=you-are-lucky
     volumes:
       - ./data:/usr/src/app/data
+      - ./logs:/usr/src/app/logs
     restart: unless-stopped
